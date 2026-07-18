@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Slendytubbies 3 Multiplayer</title>
+<link rel="shortcut icon" href="TemplateData/favicon.ico">
+<link rel="stylesheet" href="TemplateData/style.css">
+</head>
+<body>
+<div id="unity-container" class="unity-desktop">
+  <canvas id="unity-canvas" width="960" height="600"></canvas>
+  <div id="unity-loading-bar">
+    <div id="unity-logo"></div>
+    <div id="unity-progress-bar-empty">
+      <div id="unity-progress-bar-full"></div>
+    </div>
+  </div>
+  <div id="unity-warning"></div>
+  <div id="unity-footer">
+    <div id="unity-webgl-logo"></div>
+    <div id="unity-fullscreen-button"></div>
+    <div id="unity-build-title">Slendytubbies 3</div>
+  </div>
+</div>
+<script>
+  var container = document.querySelector("#unity-container");
+  var canvas = document.querySelector("#unity-canvas");
+  var loadingBar = document.querySelector("#unity-loading-bar");
+  var progressBarFull = document.querySelector("#unity-progress-bar-full");
+  var fullscreenButton = document.querySelector("#unity-fullscreen-button");
+  var warningBanner = document.querySelector("#unity-warning");
+
+  function unityShowBanner(msg, type) {
+    function updateBannerVisibility() {
+      warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+    }
+    var div = document.createElement('div');
+    div.innerHTML = msg;
+    warningBanner.appendChild(div);
+    if (type == 'error') div.style = 'background: red; padding: 10px;';
+    else {
+      if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+      setTimeout(function() {
+        warningBanner.removeChild(div);
+        updateBannerVisibility();
+      }, 5000);
+    }
+    updateBannerVisibility();
+  }
+
+  var buildUrl = "Build";
+  var loaderUrl = buildUrl + "/UnityLoader.js";
+
+  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+    container.className = "unity-mobile";
+    config.devicePixelRatio = 1;
+    unityShowBanner('WebGL builds are not supported on mobile devices.');
+  } else {
+    canvas.style.width = "960px";
+    canvas.style.height = "600px";
+  }
+  loadingBar.style.display = "block";
+
+  var script = document.createElement("script");
+  script.src = loaderUrl;
+  script.onload = function() {
+    var config = {
+      dataUrl: buildUrl + "/ST3.data.unityweb",
+      wasmCodeUrl: buildUrl + "/ST3.wasm.code.unityweb",
+      wasmFrameworkUrl: buildUrl + "/ST3.wasm.framework.unityweb",
+      graphicsAPI: ["WebGL 1.0"],
+      webglContextAttributes: { preserveDrawingBuffer: false },
+      backgroundUrl: "",
+      splashScreenStyle: "Dark",
+      backgroundColor: "#231F20",
+      cacheControl: { default: "must-revalidate" },
+      developmentBuild: false,
+      multithreading: false,
+      unityVersion: "2019.4.31f1",
+      showBanner: unityShowBanner
+    };
+    UnityLoader.instantiate("unity-container", JSON.stringify(config), function(progress) {
+      progressBarFull.style.width = 100 * progress + "%";
+    });
+  };
+  document.body.appendChild(script);
+</script>
+</body>
+</html>
