@@ -1,68 +1,85 @@
 <!DOCTYPE html>
 <html lang="en-us">
-<head>
-<meta charset="utf-8">
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Slendytubbies 3 Multiplayer</title>
-<link rel="shortcut icon" href="TemplateData/favicon.ico">
-<link rel="stylesheet" href="TemplateData/style.css">
-<style>
-#download-screen { text-align: center; padding: 40px 20px; font-family: Arial, sans-serif; color: #fff; background: #231F20; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-#download-screen h1 { margin-bottom: 20px; }
-#dl-bar { width: 500px; max-width: 90vw; height: 24px; background: #444; border-radius: 12px; overflow: hidden; margin: 10px 0; }
-#dl-fill { height: 100%; background: #4caf50; width: 0%; transition: width 0.3s; }
-#dl-text { font-size: 14px; color: #aaa; }
-</style>
-</head>
-<body>
-<div id="download-screen">
-  <h1>Slendytubbies 3 Multiplayer</h1>
-  <div id="dl-bar"><div id="dl-fill"></div></div>
-  <div id="dl-text">Loading...</div>
-</div>
-<div id="unity-container" class="unity-desktop" style="display:none">
-  <canvas id="unity-canvas" width="960" height="600"></canvas>
-  <div id="unity-loading-bar">
-    <div id="unity-logo"></div>
-    <div id="unity-progress-bar-empty">
-      <div id="unity-progress-bar-full"></div>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Unity Web Player | Slendytubbies 3 Multiplayer</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <link rel="stylesheet" href="TemplateData/style.css">
+    <style>
+#loading-text {
+  font-weight: bold;
+  background: linear-gradient(
+    270deg,
+    #ff0000,
+    #ff7f00,
+    #ffff00,
+    #00ff00,
+    #0000ff,
+    #4b0082,
+    #8f00ff
+  );
+  background-size: 400% 400%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: rainbow 3s ease infinite;
+}
+@keyframes rainbow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+    </style>
+  </head>
+  <body>
+    <div id="loading-text"
+    style="color: white; font-size: 48px; font-family: cursive; text-align: center; margin-top: 20px;"> LOADING...
     </div>
-  </div>
-  <div id="unity-warning"></div>
-  <div id="unity-footer">
-    <div id="unity-webgl-logo"></div>
-    <div id="unity-fullscreen-button"></div>
-    <div id="unity-build-title">Slendytubbies 3</div>
-  </div>
-</div>
+    <div id="unity-container">
+      <canvas id="unity-canvas" tabindex="-1"></canvas>
+      <div id="unity-loading-bar">
+        <div id="unity-logo"></div>
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full"></div>
+        </div>
+      </div>
+      <div id="unity-warning"> </div>
+    </div>
 <script>
-var buildUrl = "Build";
-var NUM_CHUNKS = 9;
-var totalBytes = 826702854;
-var chunksLoaded = 0;
+var loadingText = document.querySelector("#loading-text");
+var container = document.querySelector("#unity-container");
+var canvas = document.querySelector("#unity-canvas");
+var loadingBar = document.querySelector("#unity-loading-bar");
+var progressBarFull = document.querySelector("#unity-progress-bar-full");
+var warningBanner = document.querySelector("#unity-warning");
 
-function updateDl(pct, text) {
-  document.getElementById("dl-fill").style.width = pct + "%";
-  document.getElementById("dl-text").textContent = text;
+function unityShowBanner(msg, type) {}
+
+var NUM_CHUNKS = 9;
+var TOTAL_BYTES = 826702854;
+var bytesLoaded = 0;
+
+function setProgress(pct, text) {
+  progressBarFull.style.width = (pct * 100) + "%";
+  loadingText.innerHTML = text;
 }
 
 function fetchChunk(index) {
   return new Promise(function(resolve, reject) {
     var xhr = new XMLHttpRequest();
-    xhr.open("GET", buildUrl + "/chunks/ST3.data.part" + index, true);
+    xhr.open("GET", "Build/chunks/ST3.data.part" + index, true);
     xhr.responseType = "arraybuffer";
     xhr.onprogress = function(e) {
       if (e.lengthComputable) {
-        var done = chunksLoaded + e.loaded;
-        updateDl((done / totalBytes * 100).toFixed(1), "Downloading game data... " + (done / totalBytes * 100).toFixed(1) + "%");
+        var done = bytesLoaded + e.loaded;
+        setProgress(done / TOTAL_BYTES, "LOADING... " + Math.round(done / TOTAL_BYTES * 100) + "%");
       }
     };
     xhr.onload = function() {
       if (xhr.status === 200) {
         resolve(new Uint8Array(xhr.response));
       } else {
-        reject(new Error("Chunk " + index + " failed (HTTP " + xhr.status + ")"));
+        reject(new Error("Chunk " + index + " failed"));
       }
     };
     xhr.onerror = function() { reject(new Error("Network error on chunk " + index)); };
@@ -70,82 +87,76 @@ function fetchChunk(index) {
   });
 }
 
-function fetchConfig(url) {
-  return new Promise(function(resolve, reject) {
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", url, true);
-    xhr.onload = function() {
-      if (xhr.status === 200) resolve(JSON.parse(xhr.responseText));
-      else reject(new Error("Failed to load config"));
-    };
-    xhr.onerror = function() { reject(new Error("Failed to load config")); };
-    xhr.send();
-  });
+async function downloadData() {
+  var chunks = [];
+  for (var i = 0; i < NUM_CHUNKS; i++) {
+    var chunk = await fetchChunk(i);
+    bytesLoaded += chunk.byteLength;
+    chunks.push(chunk);
+  }
+  var total = 0;
+  chunks.forEach(function(c) { total += c.byteLength; });
+  var merged = new Uint8Array(total);
+  var offset = 0;
+  chunks.forEach(function(c) { merged.set(c, offset); offset += c.byteLength; });
+  return URL.createObjectURL(new Blob([merged]));
 }
 
-async function run() {
+(async function() {
   try {
-    var chunks = [];
-    for (var i = 0; i < NUM_CHUNKS; i++) {
-      updateDl((chunksLoaded / totalBytes * 100).toFixed(1), "Downloading chunk " + (i + 1) + "/" + NUM_CHUNKS + "...");
-      var chunk = await fetchChunk(i);
-      chunksLoaded += chunk.byteLength;
-      chunks.push(chunk);
-    }
-    updateDl(100, "Assembling data file...");
-    var totalLength = 0;
-    chunks.forEach(function(c) { totalLength += c.byteLength; });
-    var merged = new Uint8Array(totalLength);
-    var offset = 0;
-    chunks.forEach(function(c) { merged.set(c, offset); offset += c.byteLength; });
-    var dataBlob = new Blob([merged]);
-    var dataUrl = URL.createObjectURL(dataBlob);
+    var dataUrl = await downloadData();
 
-    updateDl(100, "Starting game...");
-
-    var config = await fetchConfig(buildUrl + "/ST3.json");
-    config.dataUrl = dataUrl;
-    var configBlob = new Blob([JSON.stringify(config)], { type: "application/json" });
-    var configUrl = URL.createObjectURL(configBlob);
-
-    document.getElementById("download-screen").style.display = "none";
-    document.getElementById("unity-container").style.display = "block";
-
-    var canvas = document.querySelector("#unity-canvas");
-    var loadingBar = document.querySelector("#unity-loading-bar");
-    var progressBarFull = document.querySelector("#unity-progress-bar-full");
-    var fullscreenButton = document.querySelector("#unity-fullscreen-button");
-    var warningBanner = document.querySelector("#unity-warning");
-
-    function unityShowBanner(msg, type) {
-      function updateBannerVisibility() {
-        warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
-      }
-      var div = document.createElement('div');
-      div.innerHTML = msg;
-      warningBanner.appendChild(div);
-      if (type == 'error') div.style = 'background: red; padding: 10px;';
-      else {
-        if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
-        setTimeout(function() { warningBanner.removeChild(div); updateBannerVisibility(); }, 5000);
-      }
-      updateBannerVisibility();
-    }
+    loadingBar.style.display = "block";
 
     var script = document.createElement("script");
-    script.src = buildUrl + "/UnityLoader.js";
+    script.src = "Build/UnityLoader.js";
+
     script.onload = function() {
-      UnityLoader.instantiate("unity-container", configUrl, function(progress) {
-        progressBarFull.style.width = 100 * progress + "%";
-      });
+      if (typeof createUnityInstance === "function") {
+        createUnityInstance(canvas, {
+          dataUrl: dataUrl,
+          frameworkUrl: "Build/ST3.wasm.framework.unityweb",
+          codeUrl: "Build/ST3.wasm.code.unityweb",
+          streamingAssetsUrl: "StreamingAssets",
+          companyName: "Zeoworks",
+          productName: "Slendytubbies 3 Multiplayer",
+          productVersion: "1.11"
+        }, function(progress) {
+          progressBarFull.style.width = (progress * 100) + "%";
+          loadingText.innerHTML = "LOADING... " + Math.round(progress * 100) + "%";
+        }).then(function() {
+          loadingBar.style.display = "none";
+          loadingText.remove();
+        }).catch(function(err) {
+          alert(err);
+        });
+        return;
+      }
+
+      if (typeof UnityLoader !== "undefined") {
+        fetch("Build/ST3.json").then(function(r) { return r.json(); }).then(function(config) {
+          config.dataUrl = dataUrl;
+          var configBlob = new Blob([JSON.stringify(config)], { type: "application/json" });
+          var configUrl = URL.createObjectURL(configBlob);
+          UnityLoader.instantiate("unity-container", configUrl, function(progress) {
+            progressBarFull.style.width = (progress * 100) + "%";
+            loadingText.innerHTML = "LOADING... " + Math.round(progress * 100) + "%";
+            if (progress === 1) {
+              loadingBar.style.display = "none";
+              loadingText.remove();
+            }
+          });
+        });
+        return;
+      }
+
+      alert("Unsupported Unity loader.");
     };
     document.body.appendChild(script);
   } catch(err) {
-    updateDl(0, "Error: " + err.message + ". Please refresh.");
+    alert("Failed to load game data: " + err.message);
   }
-}
-
-run();
+})();
 </script>
-</body>
+  </body>
 </html>
