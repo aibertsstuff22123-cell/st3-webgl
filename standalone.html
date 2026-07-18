@@ -215,7 +215,9 @@
         unityVersion: "2019.4.31f1",
         showBanner: unityShowBanner
       };
-      UnityLoader.instantiate("unity-container", JSON.stringify(config), function(progress) {
+      var configBlob = new Blob([JSON.stringify(config)], { type: "application/json" });
+      var configUrl = URL.createObjectURL(configBlob);
+      UnityLoader.instantiate("unity-container", configUrl, function(progress) {
         progressBarFull.style.width = 100 * progress + "%";
       }).then(function(unityInstance) {
         loadingBar.style.display = "none";
