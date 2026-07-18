@@ -3,9 +3,9 @@
   "productName": "Slendytubbies 3",
   "productVersion": "1.0",
 
-  "dataUrl": "https://cdn.jsdelivr.net/gh/aibertsstuff22123-cell/st3-webgl@master/Build/ST3.data.unityweb",
-  "wasmCodeUrl": "https://cdn.jsdelivr.net/gh/aibertsstuff22123-cell/st3-webgl@master/Build/ST3.wasm.code.unityweb",
-  "wasmFrameworkUrl": "https://cdn.jsdelivr.net/gh/aibertsstuff22123-cell/st3-webgl@master/Build/ST3.wasm.framework.unityweb",
+  "dataUrl": "ST3.data.unityweb",
+  "wasmCodeUrl": "ST3.wasm.code.unityweb",
+  "wasmFrameworkUrl": "ST3.wasm.framework.unityweb",
 
   "graphicsAPI": ["WebGL 1.0"],
   "webglContextAttributes": {
