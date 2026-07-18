@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Slendytubbies 3 Multiplayer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #231F20; color: #fff; font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    #dl-container { text-align: center; width: 960px; max-width: 90vw; }
+    #dl-container h1 { margin-bottom: 20px; font-size: 24px; }
+    #dl-container .status { margin-bottom: 10px; font-size: 14px; color: #aaa; min-height: 20px; }
+    #dl-container .progress-outer { width: 100%; height: 24px; background: #444; border-radius: 12px; overflow: hidden; margin-bottom: 10px; }
+    #dl-container .progress-inner { height: 100%; background: #4caf50; width: 0%; transition: width 0.3s; border-radius: 12px; }
+    #dl-container .progress-text { font-size: 13px; color: #ccc; margin-bottom: 15px; }
+    #dl-container .file-status { text-align: left; font-size: 12px; color: #888; max-height: 200px; overflow-y: auto; }
+    #dl-container .file-status div { padding: 2px 0; }
+    #dl-container .file-status .done { color: #4caf50; }
+    #dl-container .file-status .active { color: #ffeb3b; }
+    #dl-container .file-status .waiting { color: #666; }
+    #dl-container #start-btn { display: none; margin-top: 15px; padding: 12px 40px; font-size: 18px; background: #4caf50; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
+    #dl-container #start-btn:hover { background: #45a049; }
+    #unity-container { position: relative; width: 960px; height: 600px; margin: 0 auto; display: none; }
+    #unity-canvas { width: 960px; height: 600px; }
+    #unity-loading-bar { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 60%; }
+    #unity-progress-bar-empty { width: 100%; height: 20px; background: #333; border-radius: 10px; overflow: hidden; }
+    #unity-progress-bar-full { height: 100%; background: #4caf50; width: 0%; transition: width 0.2s; }
+    #unity-warning { position: absolute; top: 0; left: 0; right: 0; display: none; z-index: 10; }
+    #unity-footer { position: absolute; bottom: 0; left: 0; right: 0; padding: 10px; display: none; }
+    #unity-fullscreen-button { cursor: pointer; width: 40px; height: 40px; background: rgba(255,255,255,0.3); border-radius: 5px; position: absolute; bottom: 10px; right: 10px; display: flex; align-items: center; justify-content: center; }
+    #unity-fullscreen-button::after { content: "⛶"; font-size: 24px; color: #fff; }
+  </style>
+</head>
+<body>
+  <div id="dl-container">
+    <h1>Slendytubbies 3 Multiplayer</h1>
+    <div class="status" id="status-text">Preparing download...</div>
+    <div class="progress-outer"><div class="progress-inner" id="progress-bar"></div></div>
+    <div class="progress-text" id="progress-text">0%</div>
+    <div class="file-status" id="file-status"></div>
+    <button id="start-btn" onclick="launchGame()">Launch Game</button>
+  </div>
+
+  <div id="unity-container">
+    <canvas id="unity-canvas" width="960" height="600"></canvas>
+    <div id="unity-loading-bar">
+      <div id="unity-progress-bar-empty">
+        <div id="unity-progress-bar-full"></div>
+      </div>
+    </div>
+    <div id="unity-warning"></div>
+    <div id="unity-footer">
+      <div id="unity-fullscreen-button"></div>
+    </div>
+  </div>
+
+<script>
+(function() {
+  var REPO_OWNER = "aibertsstuff22123-cell";
+  var REPO = "st3-webgl";
+  var RELEASE_TAG = "v1.0";
+  var RELEASE_BASE = "https://github.com/" + REPO_OWNER + "/" + REPO + "/releases/download/" + RELEASE_TAG;
+  var RAW_BASE = "https://raw.githubusercontent.com/" + REPO_OWNER + "/" + REPO + "/master";
+
+  var files = [
+    { name: "UnityLoader.js", url: RAW_BASE + "/Build/UnityLoader.js", type: "script" },
+    { name: "ST3.data.unityweb", url: RELEASE_BASE + "/ST3.data.unityweb", type: "data" },
+    { name: "ST3.wasm.code.unityweb", url: RELEASE_BASE + "/ST3.wasm.code.unityweb", type: "data" },
+    { name: "ST3.wasm.framework.unityweb", url: RELEASE_BASE + "/ST3.wasm.framework.unityweb", type: "data" },
+    { name: "style.css", url: RAW_BASE + "/TemplateData/style.css", type: "text" }
+  ];
+
+  var loaded = {};
+  var fileStatusEl = document.getElementById("file-status");
+  var progressBar = document.getElementById("progress-bar");
+  var progressText = document.getElementById("progress-text");
+  var statusText = document.getElementById("status-text");
+
+  function setStatus(name, state) {
+    var div = document.getElementById("file-" + name);
+    if (!div) {
+      div = document.createElement("div");
+      div.id = "file-" + name;
+      fileStatusEl.appendChild(div);
+    }
+    div.textContent = name + " - " + state;
+    div.className = state === "Done" ? "done" : state === "Downloading..." ? "active" : "waiting";
+  }
+
+  function updateProgress() {
+    var done = 0;
+    files.forEach(function(f) { if (loaded[f.name]) done++; });
+    var pct = Math.round((done / files.length) * 100);
+    progressBar.style.width = pct + "%";
+    progressText.textContent = pct + "%";
+  }
+
+  function fetchFile(file) {
+    return new Promise(function(resolve, reject) {
+      setStatus(file.name, "Downloading...");
+      var xhr = new XMLHttpRequest();
+      xhr.open("GET", file.url, true);
+      xhr.responseType = "blob";
+
+      var lastLoaded = 0;
+      var startTime = Date.now();
+      xhr.onprogress = function(e) {
+        if (e.lengthComputable) {
+          var mb = (e.loaded / 1048576).toFixed(1);
+          var total = (e.total / 1048576).toFixed(0);
+          var elapsed = (Date.now() - startTime) / 1000;
+          var speed = elapsed > 0 ? ((e.loaded - lastLoaded) / 1048576 / Math.max((Date.now() - startTime) / 1000 - (lastLoaded > 0 ? (Date.now() - startTime - 100) / 1000 : 0), 0.1)).toFixed(1) : "?";
+          lastLoaded = e.loaded;
+          setStatus(file.name, "Downloading... " + mb + "/" + total + " MB");
+        }
+      };
+
+      xhr.onload = function() {
+        if (xhr.status === 200 || xhr.status === 0) {
+          loaded[file.name] = xhr.response;
+          setStatus(file.name, "Done");
+          updateProgress();
+          resolve();
+        } else {
+          setStatus(file.name, "Failed (HTTP " + xhr.status + ")");
+          reject(new Error("Failed to download " + file.name));
+        }
+      };
+      xhr.onerror = function() {
+        setStatus(file.name, "Failed (network error)");
+        reject(new Error("Network error downloading " + file.name));
+      };
+      xhr.send();
+    });
+  }
+
+  statusText.textContent = "Downloading game files from GitHub...";
+  var chain = Promise.resolve();
+  files.forEach(function(file) {
+    chain = chain.then(function() { return fetchFile(file); });
+  });
+  chain.then(function() {
+    statusText.textContent = "All files downloaded! Ready to launch.";
+    document.getElementById("start-btn").style.display = "inline-block";
+  }).catch(function(err) {
+    statusText.textContent = "Error: " + err.message + ". Please refresh and try again.";
+  });
+
+  window.launchGame = function() {
+    document.getElementById("dl-container").style.display = "none";
+    document.getElementById("unity-container").style.display = "block";
+    document.getElementById("unity-footer").style.display = "block";
+
+    var canvas = document.getElementById("unity-canvas");
+    var progressBarFull = document.getElementById("unity-progress-bar-full");
+    var loadingBar = document.getElementById("unity-loading-bar");
+    var warningBanner = document.getElementById("unity-warning");
+    var fullscreenButton = document.getElementById("unity-fullscreen-button");
+
+    function unityShowBanner(msg, type) {
+      function updateBannerVisibility() {
+        warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+      }
+      var div = document.createElement('div');
+      div.innerHTML = msg;
+      warningBanner.appendChild(div);
+      if (type == 'error') div.style = 'background: red; padding: 10px;';
+      else {
+        if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+        setTimeout(function() {
+          warningBanner.removeChild(div);
+          updateBannerVisibility();
+        }, 5000);
+      }
+      updateBannerVisibility();
+    }
+
+    var dataBlob = loaded["ST3.data.unityweb"];
+    var wasmCodeBlob = loaded["ST3.wasm.code.unityweb"];
+    var wasmFwBlob = loaded["ST3.wasm.framework.unityweb"];
+    var styleCSS = loaded["style.css"];
+
+    if (styleCSS) {
+      var blobUrl = URL.createObjectURL(styleCSS);
+      var link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = blobUrl;
+      document.head.appendChild(link);
+    }
+
+    var dataUrl = URL.createObjectURL(dataBlob);
+    var wasmCodeUrl = URL.createObjectURL(wasmCodeBlob);
+    var wasmFwUrl = URL.createObjectURL(wasmFwBlob);
+
+    loadingBar.style.display = "block";
+
+    var loaderScriptBlob = loaded["UnityLoader.js"];
+    var loaderScriptUrl = URL.createObjectURL(loaderScriptBlob);
+    var script = document.createElement("script");
+    script.src = loaderScriptUrl;
+    script.onload = function() {
+      var config = {
+        dataUrl: dataUrl,
+        wasmCodeUrl: wasmCodeUrl,
+        wasmFrameworkUrl: wasmFwUrl,
+        graphicsAPI: ["WebGL 1.0"],
+        webglContextAttributes: { preserveDrawingBuffer: false },
+        backgroundUrl: "",
+        splashScreenStyle: "Dark",
+        backgroundColor: "#231F20",
+        cacheControl: { default: "must-revalidate" },
+        developmentBuild: false,
+        multithreading: false,
+        unityVersion: "2019.4.31f1",
+        showBanner: unityShowBanner
+      };
+      UnityLoader.instantiate("unity-container", JSON.stringify(config), function(progress) {
+        progressBarFull.style.width = 100 * progress + "%";
+      }).then(function(unityInstance) {
+        loadingBar.style.display = "none";
+        fullscreenButton.onclick = function() {
+          unityInstance.SetFullscreen(1);
+        };
+      });
+    };
+    document.body.appendChild(script);
+  };
+})();
+</script>
+</body>
+</html>
