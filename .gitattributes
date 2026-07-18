@@ -1,2 +1,1 @@
-# No LFS - all files stored directly for GitHub Pages compatibility
-*.unityweb filter=lfs diff=lfs merge=lfs -text
+# No LFS
